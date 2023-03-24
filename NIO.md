@@ -8,6 +8,8 @@
 
 #### 1、Buffer缓冲区
 
+<img src="/Users/hurenxiang/Desktop/Typora文档中心/typora-document/pic/image-20230324152914034.png" alt="image-20230324152914034" style="zoom:50%;" />
+
 缓冲区本质上是一块可以写入数据，然后可以从中读取数据的内存。这块内存被包装成`NIO Buffer`对象，并提供了 一组方法，用来方便的访问该块内存。相比较直接对数组的操作，`Buffer API`更加容易操作和管理。
 
 ##### 1.1、Buffer重要概念
@@ -17,10 +19,10 @@
 * 限制(`limit`)：表示缓冲区中可以操作数据的大小(`limit`后数据不能进行读写)。缓冲区的限制不
   能为负，并且不能大于其容量。写入模式，限制等于buffer的容量。读取模式下，`limit`等于写入
   的数据量。
-* 位置(`position`)：下一个要读取或写入的数据的索引。缓’中区的位置不能为负，并且不能大于其限
+* 位置(`position`)：下一个要读取或写入的数据的索引。缓冲区的位置不能为负，并且不能大于其限
   制。
 * 标记(`mark`)与重置(`reset`)：标记是一个索弓l，通过`Buffer`中的`mark()`方法指定Buffer中一
-  个特定的 position，之后可以通过调用reset(）方法恢复到这个`position`。
+  个特定的 `position`，之后可以通过调用`reset()`方法恢复到这个`position`。
 
 ##### 1.2、Buffer常见方法
 
@@ -41,13 +43,25 @@ Buffer rewind()         将位置设为为0．取消设置的mark
 
 #### 2、Channel通道
 
-`Java NIO`的通道类似流，但又有些不同：既可以从通道中读取数据，又可以写数据到通道。但流的`input`或 `output`读写通常是单向的。通道可以非阻塞读取和写入通道，通道可以支持读取或写入缓冲区，也支持异步地读写。
+通道(`Channel`)：由`java.nio.channels`包定义的。`Channel`表示`IO`源与目标打开的连接。`Channel`类似于传统的“流”。只不过`Channel`本身不能直接访问数据，`Channel`只能与`Buffer`进行交互。
+
+1. NIO的通道类似于流，但有些区别如下
+
+* 通道可以同时进行读写，而流只能读或者只能写；
+* 通道可以实现异步读写数据；
+* 通道可以从缓冲读数据，也可以写数据到缓冲；
+
+2. `BlO`中的`stream`是单向的，例如`FilelnputStream`对象只能进行读取数据的操作，而`NIO`中的通道(`Channel`)是双向的，可以读操作，也可以写操作。
 
 #### 3、Selector选择器
 
-`Selector`是一个`Java NIO`组件，可以能够检查一个或多个`NIO`通道，并确定哪些通道已经准备好进行读取或写入。这样，一个单独的线程可以管理多个`channel`，从而管理多个网络连接，提高效率。
+选择器(`Selector`)是`SeIectabIeChannIe`对象的多路复用器，`Selector`可以同时监控多个`SelectableChannel` 的`IO`状况，也就是说，利用`Selector`可使一个单独的线程管理多个`Channel`。
 
-### NIO 服务端执行流程
+### 三、落地实践
+
+#### 3.1、服务端接收客户端的连接请求(一对一)
+
+##### NIO 服务端执行流程
 
 1. 创建 `Selector` 对象：创建一个 `Selector` 对象来管理所有的 `Channel`。
 2. 创建 `ServerSocketChannel`：通过 `ServerSocketChannel.open()` 方法创建一个 `ServerSocketChannel` 对象，用来监听客户端的连接请求。
@@ -57,12 +71,86 @@ Buffer rewind()         将位置设为为0．取消设置的mark
 6. 处理连接请求：在一个死循环中调用 `Selector.select()` 方法来等待客户端的连接请求。当 `Selector.select()` 方法返回值大于 0 时，表示有客户端连接请求到来，可以通过 `SelectionKey` 获取对应的 `Channel`，并将该 `Channel` 注册到 `Selector` 中，以便后续处理读写操作。
 7. 处理读写操作：在一个死循环中调用 `Selector.select()` 方法来等待 `Channel` 可读/可写事件。当 `Selector.select()` 方法返回值大于 0 时，表示有 `Channel` 可读/可写，可以通过 `SelectionKey` 获取对应的 `Channel`，并处理相应的读写操作。
 
-### NIO 客户端执行流程
+```java
+/**
+ * 目标：NIO非阻塞通信下的入门案例
+ */
+public class Server {
+    public static void main(String[] args) throws IOException {
+        //获取通道
+        ServerSocketChannel serverSocketChannel = ServerSocketChannel.open();
+        //切换非阻塞模式
+        serverSocketChannel.configureBlocking(false);
+        //绑定连接
+        serverSocketChannel.bind(new InetSocketAddress(9999));
+        //获取选择器
+        Selector selector = Selector.open();
+        //将通道注册到选择器上，并且指定"监听接收事件"
+        serverSocketChannel.register(selector, SelectionKey.OP_ACCEPT);
+        //轮询式的获取选择器上已经"准备就绪"的事件
+        while (selector.select() > 0) {
+            System.out.println("轮一轮");
+            //获取当前选择器中所有注册的"选择键(已就绪的监听事件)"）
+            Iterator<SelectionKey> iterator = selector.selectedKeys().iterator();
+            while (iterator.hasNext()){
+                //获取准备"就绪"的事件
+                SelectionKey next = iterator.next();
+                //判断具体是什么事件准备就绪
+                if (next.isAcceptable()){
+                    //若"接收就绪"，获取客户端连接
+                    SocketChannel accept = serverSocketChannel.accept();
+                    //切换非阻塞模式
+                    accept.configureBlocking(false);
+                    //将通道注册到选择器上
+                    accept.register(selector,SelectionKey.OP_READ);
+                } else if (next.isReadable()){
+                    //获取当前选择器上"读就绪"状态的通道
+                    SocketChannel channel = (SocketChannel) next.channel();
+                    //读取数据
+                    ByteBuffer allocate = ByteBuffer.allocate(1024);
+                    int len = 0;
+                    while ((len = channel.read(allocate)) > 0) {
+                        allocate.flip();
+                        System.out.println(new String(allocate.array(),0,len));
+                        allocate.clear();
+                    }
+                }
+                iterator.remove();
+            }
+        }
+    }
+}
+```
+
+##### NIO 客户端执行流程
 
 1. 创建 `SocketChannel` 对象：通过 `SocketChannel.open()` 方法创建一个 `SocketChannel` 对象。
 2. 配置非阻塞模式：调用 `SocketChannel.configureBlocking(false)` 方法，将 `SocketChannel` 设置为非阻塞模式。
 3. 连接服务器：调用 `SocketChannel.connect()` 方法连接服务器。由于设置为非阻塞模式，连接操作不会一直阻塞等待连接成功，而是会立即返回。
 4. 判断连接是否成功：在一个死循环中调用 `SocketChannel.finishConnect()` 方法来判断连接是否成功。当该方法返回 `true` 时，表示连接成功，可以开始进行读写操作。
 5. 处理读写操作：在一个死循环中调用 `Selector.select()` 方法来等待 `Channel` 可读/可写事件。当 `Selector.select()` 方法返回值大于 0 时，表示有 `Channel` 可读/可写，可以通过 `SelectionKey` 获取对应的 `Channel`，并处理相应的读写操作。
+
+```java
+public class Client {
+    public static void main(String[] args) throws Exception {
+        //获取通道
+        SocketChannel socketChannel = SocketChannel.open(new InetSocketAddress("127.0.0.1", 9999));
+        //切换非阻塞模式
+        socketChannel.configureBlocking(false);
+        //分配指定大小的缓冲区
+        ByteBuffer byteBuffer = ByteBuffer.allocate(1024);
+        //发送数据给服务端
+        Scanner scanner = new Scanner(System.in);
+        while (scanner.hasNext()) {
+            String str = scanner.nextLine();
+            byteBuffer.put((new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(System.currentTimeMillis())+"  "+str).getBytes());
+            byteBuffer.flip();
+            socketChannel.write(byteBuffer);
+            byteBuffer.clear();
+        }
+        socketChannel.close();
+    }
+}
+```
 
 总体来说，`NIO` 的执行流程比较复杂，需要对多个对象进行管理，包括 `Selector`、`Channel` 和 `SelectionKey` 等，需要掌握相应的 API 和使用方法。但是，`NIO` 的优点在于它能够高效地处理大量的并发连接，提高系统的性能和稳定性。
