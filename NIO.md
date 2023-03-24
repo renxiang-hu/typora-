@@ -154,3 +154,94 @@ public class Client {
 ```
 
 总体来说，`NIO` 的执行流程比较复杂，需要对多个对象进行管理，包括 `Selector`、`Channel` 和 `SelectionKey` 等，需要掌握相应的 API 和使用方法。但是，`NIO` 的优点在于它能够高效地处理大量的并发连接，提高系统的性能和稳定性。
+
+#### 3.2、服务端接收客户端的连接请求(一对多)
+
+**服务端代码**
+
+```java
+public class Server {
+    public static void main(String[] args) throws IOException {
+        System.out.println("服务端启动~~~");
+        //获取通道
+        ServerSocketChannel serverSocketChannel = ServerSocketChannel.open();
+        //切换为非阻塞模式
+        serverSocketChannel.configureBlocking(false);
+        //绑定连接端口
+        serverSocketChannel.bind(new InetSocketAddress(9999));
+        //获取选择器
+        Selector selector = Selector.open();
+        //将通道注册到选择器上，并且开始指定监听接收事件
+        serverSocketChannel.register(selector, SelectionKey.OP_ACCEPT);
+        //使用selector选择器轮询已经就绪好的事件
+        while (selector.select() > 0) {
+            System.out.println("开始一轮事件处理~");
+            Iterator<SelectionKey> iterator = selector.selectedKeys().iterator();
+            //开始遍历准备好的事件
+            while (iterator.hasNext()){
+                //提取当前事件
+                SelectionKey selectionKey = iterator.next();
+                if (selectionKey.isAcceptable()){
+                    //直接获取当前接入的客户端通道
+                    SocketChannel socketChannel = serverSocketChannel.accept();
+                    //将客户端的通道设置为非阻塞的
+                    socketChannel.configureBlocking(false);
+                    //将客户端的通道注册到selector上
+                    socketChannel.register(selector,SelectionKey.OP_READ);
+                } else if (selectionKey.isReadable()){
+                    //获取当前选择器上的"读就绪事件"
+                    SocketChannel socketChannel = (SocketChannel)selectionKey.channel();
+                    //开始读取数据
+                    ByteBuffer byteBuffer = ByteBuffer.allocate(1024);
+                    int len = 0;
+                    while ((len = socketChannel.read(byteBuffer)) > 0){
+                        byteBuffer.flip();
+                        System.out.println(new String(byteBuffer.array(),0,len));
+                        byteBuffer.clear();
+                    }
+                }
+                //处理完毕当前事件后，需要移除当前事件，否则会重复处理
+                iterator.remove();
+            }
+        }
+    }
+}
+```
+
+**客户端代码**
+
+```java
+public class Client {
+    public static void main(String[] args) throws Exception {
+        //获取通道
+        SocketChannel socketChannel = SocketChannel.open(new InetSocketAddress("127.0.0.1",9999));
+        //切换为非阻塞模式
+        socketChannel.configureBlocking(false);
+        //分配指定缓存大小
+        ByteBuffer byteBuffer = ByteBuffer.allocate(1024);
+        //发送数据给服务器端
+        Scanner scanner = new Scanner(System.in);
+        while (true) {
+            System.out.println("请输入：");
+            String s = scanner.nextLine();
+            byteBuffer.put(s.getBytes());
+            byteBuffer.flip();
+            socketChannel.write(byteBuffer);
+            byteBuffer.clear();
+        }
+    }
+}
+```
+
+### 四、答疑
+
+#### 4.1、serverSocketChannel为什么要切换为非阻塞模式
+
+`ServerSocketChannel` 切换为非阻塞模式的主要原因是为了提高服务器的性能和可伸缩性。
+
+在阻塞模式下，当 `ServerSocketChannel` 调用 `accept()` 方法时，如果没有客户端连接到服务器，则 `accept()` 方法将一直阻塞等待，直到有连接到来或者发生异常才会返回。这种阻塞式的等待会浪费服务器的资源，降低服务器的响应速度和并发处理能力。
+
+而在非阻塞模式下，`ServerSocketChannel` 的 `accept()` 方法会立即返回，无论是否有客户端连接到服务器。如果没有连接到来，则 `accept()` 方法将返回 `null`。这种非阻塞的方式允许服务器在等待连接的同时，可以处理其他任务，从而提高了服务器的并发处理能力和响应速度。
+
+另外，非阻塞模式还可以实现多路复用，即在单线程中同时处理多个连接。这种方式可以减少线程的创建和销毁，节省服务器资源，提高服务器的可伸缩性。
+
