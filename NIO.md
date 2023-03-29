@@ -57,7 +57,31 @@ Buffer rewind()         将位置设为为0．取消设置的mark
 
 选择器(`Selector`)是`SeIectabIeChannIe`对象的多路复用器，`Selector`可以同时监控多个`SelectableChannel` 的`IO`状况，也就是说，利用`Selector`可使一个单独的线程管理多个`Channel`。
 
-### 三、落地实践
+selector 的作用就是配合一个线程来管理多个 channel，获取这些 channel 上发生的事件，这些 channel 工作在非阻塞模式下，不会让线程吊死在一个 channel 上。适合连接数特别多，但流量低的场景（low traffic）
+
+<img src="pic/image-20230328002514715.png" alt="image-20230328002514715" style="zoom:50%;" />
+
+调用 selector 的 select() 会阻塞直到 channel 发生了读写就绪事件，这些事件发生，select 方法就会返回这些事件交给 thread 来处理。
+
+### 三、byteBuffer常用方法
+
+#### allocate
+
+`ByteBuffer.allocate()` 是Java `ByteBuffer`类中的一个静态方法，它可以创建一个新的字节缓冲区对象。这个方法会分配一块指定大小的连续内存空间，用于存储字节数据。通过这个方法创建的字节缓冲区对象默认情况下都是写模式，即可以往缓冲区中写入数据。如果需要读取缓冲区中的数据，需要使用 `flip()` 方法将缓冲区切换为读模式。
+
+#### remark
+
+标记当前position的位置
+
+#### reset
+
+将position重置到remark的位置
+
+#### rewind
+
+将position重置到索引为0的位置
+
+### 四、落地实践
 
 #### 3.1、服务端接收客户端的连接请求(一对一)
 
@@ -233,7 +257,7 @@ public class Client {
 }
 ```
 
-### 四、答疑
+### 五、答疑
 
 #### 4.1、serverSocketChannel为什么要切换为非阻塞模式
 
