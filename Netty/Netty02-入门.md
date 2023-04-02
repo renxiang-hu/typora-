@@ -262,8 +262,8 @@ new ServerBootstrap()
                 public void channelRead(ChannelHandlerContext ctx, Object msg) {
                     ByteBuf byteBuf = msg instanceof ByteBuf ? ((ByteBuf) msg) : null;
                     if (byteBuf != null) {
-                        byte[] buf = new byte[16];
-                        ByteBuf len = byteBuf.readBytes(buf, 0, byteBuf.readableBytes());
+                        byte[] buf = new byte[16];0
+` f                        ByteBuf len = byteBuf.readBytes(buf, 0, byteBuf.readableBytes());
                         log.debug(new String(buf));
                     }
                 }
