@@ -52,3 +52,10 @@ public class ListTest {
 }
 ```
 
+#### 一个数组的值传到另一个数组
+
+```java
+int[] originalArray = {1, 2, 3, 4, 5};
+int[] newArray = Arrays.copyOf(originalArray, originalArray.length);
+```
+
